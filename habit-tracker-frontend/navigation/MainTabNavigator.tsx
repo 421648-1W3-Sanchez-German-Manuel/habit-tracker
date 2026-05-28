@@ -1,5 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { FriendsNavigator } from './FriendsNavigator';
 import { HabitsNavigator } from './HabitsNavigator';
 import { HomeScreen } from '../screens/HomeScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
@@ -7,11 +8,16 @@ import type { MainTabParamList } from '../types/navigation';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
-type TabIconName = 'check-circle-outline' | 'home-outline' | 'account-outline';
+type TabIconName =
+  | 'check-circle-outline'
+  | 'home-outline'
+  | 'account-multiple-outline'
+  | 'account-outline';
 
 const tabIconMap: Record<keyof MainTabParamList, TabIconName> = {
   Habits: 'check-circle-outline',
   Home: 'home-outline',
+  Friends: 'account-multiple-outline',
   Profile: 'account-outline',
 };
 
@@ -38,6 +44,7 @@ export const MainTabNavigator = () => {
     >
       <Tab.Screen name="Habits" component={HabitsNavigator} options={{ headerShown: false }} />
       <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen name="Friends" component={FriendsNavigator} options={{ headerShown: false }} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );

@@ -361,6 +361,9 @@ export const ProfileScreen = () => {
         <View style={styles.errorButtonWrap}>
           <Button title="Try again" onPress={() => void loadProfileData()} />
         </View>
+        <View style={styles.errorButtonWrap}>
+          <Button title="Log out" onPress={() => void logout()} />
+        </View>
       </View>
     );
   }

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.tp1.habittracker.domain.model.User;
 import com.tp1.habittracker.dto.user.CreateUserRequest;
 import com.tp1.habittracker.exception.ResourceNotFoundException;
+import com.tp1.habittracker.repository.OutboxEventRepository;
 import com.tp1.habittracker.repository.UserRepository;
 import java.util.Optional;
 import java.util.UUID;
@@ -27,13 +28,16 @@ class UserServiceTest {
     private UserRepository userRepository;
 
     @Mock
+    private OutboxEventRepository outboxEventRepository;
+
+    @Mock
     private PasswordEncoder passwordEncoder;
 
     private UserService userService;
 
     @BeforeEach
     void setUp() {
-        userService = new UserService(userRepository, passwordEncoder);
+        userService = new UserService(userRepository, outboxEventRepository, passwordEncoder);
     }
 
     @Test

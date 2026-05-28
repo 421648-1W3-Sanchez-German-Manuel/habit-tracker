@@ -1,10 +1,10 @@
 import { useCallback, useMemo, useState } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import {
   ActivityIndicator,
   Alert,
-  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HabitActionMenu } from '../components/HabitActionMenu';
 import { HabitListItem } from '../components/HabitListItem';
 import { habitService } from '../services/habitService';
+import { recommendationService } from '../services/recommendationService';
 import {
   buildLogsByHabitId,
   getCurrentPeriodLog,
@@ -25,21 +26,8 @@ import {
 import { useAuthStore } from '../store/authStore';
 import { isApiError } from '../types/api';
 import type { Habit, HabitLog, HabitLogsByHabitId, HabitStreakResponse } from '../types/habit';
-
-interface SocialActivityItem {
-  id: string;
-  friendName: string;
-  habitName: string;
-  streak: number;
-}
-
-const mockSocialActivity: SocialActivityItem[] = [
-  { id: '1', friendName: 'Juan', habitName: 'Drink water', streak: 5 },
-  { id: '2', friendName: 'Sofia', habitName: 'Read 10 pages', streak: 12 },
-  { id: '3', friendName: 'Ana', habitName: 'Stretch 15 minutes', streak: 3 },
-  { id: '4', friendName: 'Pedro', habitName: 'Morning walk', streak: 8 },
-  { id: '5', friendName: 'Lucia', habitName: 'Meditation', streak: 0 },
-];
+import type { HabitRecommendation } from '../types/recommendation';
+import type { MainTabParamList } from '../types/navigation';
 
 const getDefaultCompletionValue = (habitType: Habit['type']): unknown => {
   switch (habitType) {
@@ -111,61 +99,25 @@ const getGreetingByHour = () => {
   return 'Evening';
 };
 
-interface SocialActionMenuProps {
-  item: SocialActivityItem;
-}
-
-const SocialActionMenu = ({ item }: SocialActionMenuProps) => {
-  const [visible, setVisible] = useState(false);
-
-  const closeMenu = () => setVisible(false);
-
-  const handleAction = (action: 'Add this habit' | 'Congratulate') => {
-    closeMenu();
-    console.log(`[Social mock] ${action} - ${item.friendName}: ${item.habitName}`);
-    Alert.alert('Mock action', `${action} for ${item.friendName}'s "${item.habitName}"`);
-  };
-
-  return (
-    <>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Open social actions for ${item.friendName}`}
-        accessibilityHint="Opens mock social actions"
-        onPress={() => setVisible(true)}
-        style={({ pressed }) => [styles.menuTrigger, pressed && styles.menuTriggerPressed]}
-      >
-        <MaterialCommunityIcons name="dots-vertical" size={20} color="#334155" />
-      </Pressable>
-
-      <Modal animationType="fade" transparent visible={visible} onRequestClose={closeMenu}>
-        <Pressable style={styles.modalOverlay} onPress={closeMenu}>
-          <View style={styles.socialMenuSheet}>
-            <View style={styles.sheetHandle} />
-
-            <Pressable style={({ pressed }) => [styles.socialMenuItem, pressed && styles.socialMenuItemPressed]} onPress={() => handleAction('Add this habit')}>
-              <MaterialCommunityIcons name="playlist-plus" size={20} color="#0f172a" />
-              <Text style={styles.socialMenuLabel}>Add this habit</Text>
-            </Pressable>
-
-            <Pressable style={({ pressed }) => [styles.socialMenuItem, pressed && styles.socialMenuItemPressed]} onPress={() => handleAction('Congratulate')}>
-              <MaterialCommunityIcons name="hand-clap" size={20} color="#0f172a" />
-              <Text style={styles.socialMenuLabel}>Congratulate</Text>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Modal>
-    </>
-  );
+const distanceLabel = (distance: number): string => {
+  if (distance <= 1) {
+    return 'Friend';
+  }
+  if (distance === 2) {
+    return 'Friend of friend';
+  }
+  return `${distance} hops away`;
 };
 
 export const HomeScreen = () => {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
   const token = useAuthStore((state) => state.token);
   const user = useAuthStore((state) => state.user);
 
   const [habits, setHabits] = useState<Habit[]>([]);
   const [logsByHabitId, setLogsByHabitId] = useState<HabitLogsByHabitId>({});
+  const [recommendations, setRecommendations] = useState<HabitRecommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -176,6 +128,7 @@ export const HomeScreen = () => {
       if (!token || !user) {
         setHabits([]);
         setLogsByHabitId({});
+        setRecommendations([]);
         setLoading(false);
         return;
       }
@@ -189,9 +142,10 @@ export const HomeScreen = () => {
       setError(null);
 
       try {
-        const [userHabits, streaks] = await Promise.all([
+        const [userHabits, streaks, recs] = await Promise.all([
           habitService.getUserHabits(user.id, token),
           habitService.getHabitsWithStreaks(token),
+          recommendationService.getHabitRecommendations(token).catch(() => [] as HabitRecommendation[]),
         ]);
 
         const habitsWithStreaks = applyStreaks(userHabits, streaks);
@@ -199,6 +153,7 @@ export const HomeScreen = () => {
 
         setHabits(habitsWithStreaks);
         setLogsByHabitId(logs);
+        setRecommendations(recs);
       } catch (loadError) {
         const message = isApiError(loadError)
           ? loadError.message
@@ -210,6 +165,16 @@ export const HomeScreen = () => {
       }
     },
     [token, user]
+  );
+
+  const handleCreateFromRecommendation = useCallback(
+    (recommendation: HabitRecommendation) => {
+      navigation.navigate('Habits', {
+        screen: 'CreateHabit',
+        params: { mode: 'create', prefillName: recommendation.habitName },
+      });
+    },
+    [navigation]
   );
 
   useFocusEffect(
@@ -441,26 +406,57 @@ export const HomeScreen = () => {
 
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Social</Text>
-            {/* <Text style={styles.mockBadge}>Mock data</Text> */}
+            <Text style={styles.sectionTitle}>From your friends</Text>
+            <Text style={styles.sectionSubtitle}>Habits we think you'll like</Text>
           </View>
 
-          <View style={styles.listStack}>
-            {mockSocialActivity.map((item) => (
-              <View key={item.id} style={styles.socialCard}>
-                <View style={styles.socialMain}>
-                  <Text style={styles.socialText}>
-                    <Text style={styles.socialFriend}>{item.friendName}</Text>
-                    {` completed "${item.habitName}"`}
-                  </Text>
-                  <View style={styles.socialStreakRow}>
-                    <Text style={styles.socialStreak}>🔥 {item.streak}</Text>
+          {recommendations.length === 0 ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => navigation.navigate('Friends')}
+              style={({ pressed }) => [styles.emptyCard, pressed && styles.emptyCardPressed]}
+            >
+              <Text style={styles.emptyTitle}>No recommendations yet</Text>
+              <Text style={styles.emptySubtitle}>
+                Add a friend to see habits they're doing that you might like.
+              </Text>
+            </Pressable>
+          ) : (
+            <View style={styles.listStack}>
+              {recommendations.map((rec) => (
+                <View key={rec.habitId} style={styles.socialCard}>
+                  <View style={styles.socialMain}>
+                    <Text style={styles.socialText}>
+                      <Text style={styles.socialFriend}>{rec.ownerUsername ?? 'A friend'}</Text>
+                      {` does "${rec.habitName}"`}
+                    </Text>
+                    <Text style={styles.socialHint} numberOfLines={1}>
+                      Similar to your “{rec.closestOwnHabit.name}”
+                    </Text>
+                    <View style={styles.socialMetaRow}>
+                      <View style={styles.distanceBadge}>
+                        <MaterialCommunityIcons
+                          name={rec.graphDistance === 1 ? 'account' : 'account-multiple'}
+                          size={12}
+                          color="#0f766e"
+                        />
+                        <Text style={styles.distanceBadgeText}>{distanceLabel(rec.graphDistance)}</Text>
+                      </View>
+                      <Text style={styles.matchScore}>{Math.round(rec.similarityScore * 100)}% match</Text>
+                    </View>
                   </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Create habit ${rec.habitName}`}
+                    onPress={() => handleCreateFromRecommendation(rec)}
+                    style={({ pressed }) => [styles.recAddButton, pressed && styles.pressed]}
+                  >
+                    <MaterialCommunityIcons name="plus" size={20} color="#ffffff" />
+                  </Pressable>
                 </View>
-                <SocialActionMenu item={item} />
-              </View>
-            ))}
-          </View>
+              ))}
+            </View>
+          )}
         </View>
       </ScrollView>
     </View>
@@ -618,15 +614,8 @@ const styles = StyleSheet.create({
     color: '#64748b',
     fontWeight: '600',
   },
-  mockBadge: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#0f766e',
-    backgroundColor: '#ccfbf1',
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    overflow: 'hidden',
+  emptyCardPressed: {
+    opacity: 0.85,
   },
   socialCard: {
     backgroundColor: '#ffffff',
@@ -641,7 +630,7 @@ const styles = StyleSheet.create({
   },
   socialMain: {
     flex: 1,
-    marginRight: 8,
+    marginRight: 10,
   },
   socialText: {
     fontSize: 14,
@@ -652,59 +641,46 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#0f172a',
   },
-  socialStreakRow: {
-    marginTop: 6,
+  socialHint: {
+    marginTop: 2,
+    fontSize: 12,
+    color: '#64748b',
+    fontStyle: 'italic',
   },
-  socialStreak: {
-    fontSize: 13,
+  socialMetaRow: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  distanceBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: '#ccfbf1',
+  },
+  distanceBadgeText: {
+    fontSize: 11,
     fontWeight: '700',
-    color: '#c2410c',
+    color: '#0f766e',
   },
-  menuTrigger: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  matchScore: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  recAddButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#0f766e',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  menuTriggerPressed: {
-    backgroundColor: '#e2e8f0',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.35)',
-    justifyContent: 'flex-end',
-  },
-  socialMenuSheet: {
-    backgroundColor: '#ffffff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingTop: 8,
-    paddingBottom: 18,
-    paddingHorizontal: 16,
-  },
-  sheetHandle: {
-    width: 44,
-    height: 4,
-    borderRadius: 999,
-    alignSelf: 'center',
-    marginBottom: 12,
-    backgroundColor: '#cbd5e1',
-  },
-  socialMenuItem: {
-    minHeight: 52,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-  },
-  socialMenuItemPressed: {
-    backgroundColor: '#f8fafc',
-  },
-  socialMenuLabel: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0f172a',
+  pressed: {
+    opacity: 0.85,
   },
 });

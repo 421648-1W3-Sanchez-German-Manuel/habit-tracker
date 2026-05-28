@@ -1,9 +1,12 @@
 package com.tp1.habittracker.service;
 
+import com.tp1.habittracker.domain.model.GraphEventType;
+import com.tp1.habittracker.domain.model.OutboxEvent;
 import com.tp1.habittracker.domain.model.User;
 import com.tp1.habittracker.dto.user.CreateUserRequest;
 import com.tp1.habittracker.exception.DuplicateResourceException;
 import com.tp1.habittracker.exception.ResourceNotFoundException;
+import com.tp1.habittracker.repository.OutboxEventRepository;
 import com.tp1.habittracker.repository.UserRepository;
 import java.util.Locale;
 import java.util.Objects;
@@ -12,14 +15,17 @@ import lombok.RequiredArgsConstructor;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
 public class UserService {
 
     private final UserRepository userRepository;
+    private final OutboxEventRepository outboxEventRepository;
     private final PasswordEncoder passwordEncoder;
 
+    @Transactional
     public User createUser(CreateUserRequest request) {
         Objects.requireNonNull(request, "request must not be null");
         String normalizedUsername = normalize(request.username());
@@ -50,7 +56,14 @@ public class UserService {
             .password(passwordEncoder.encode(rawPassword))
             .build();
 
-        return userRepository.save(user);
+        User saved = userRepository.save(user);
+
+        outboxEventRepository.save(OutboxEvent.builder()
+                .eventType(GraphEventType.USER_CREATED)
+                .aggregateId(saved.getId().toString())
+                .build());
+
+        return saved;
     }
 
     public User getUserById(String id) {

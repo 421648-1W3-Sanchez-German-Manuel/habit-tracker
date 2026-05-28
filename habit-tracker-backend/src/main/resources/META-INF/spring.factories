@@ -1,0 +1,1 @@
+org.springframework.boot.env.EnvironmentPostProcessor=com.tp1.habittracker.config.DotEnvPostProcessor

@@ -23,6 +23,7 @@ import com.tp1.habittracker.exception.ResourceNotFoundException;
 import com.tp1.habittracker.repository.HabitLogDateView;
 import com.tp1.habittracker.repository.HabitLogRepository;
 import com.tp1.habittracker.repository.HabitRepository;
+import com.tp1.habittracker.repository.OutboxEventRepository;
 import com.tp1.habittracker.repository.UserRepository;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -46,6 +47,10 @@ class HabitServiceTest {
 
     @Mock
     private HabitLogRepository habitLogRepository;
+
+    @Mock
+    private OutboxEventRepository outboxEventRepository;
+
     @Mock
     private OllamaClient ollamaClient;
 
@@ -61,6 +66,7 @@ class HabitServiceTest {
             habitRepository,
             userRepository,
             habitLogRepository,
+            outboxEventRepository,
             ollamaClient,
             habitSimilarityService
         );

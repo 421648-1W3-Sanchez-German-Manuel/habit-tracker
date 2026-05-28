@@ -11,6 +11,7 @@ import com.tp1.habittracker.domain.model.User;
 import com.tp1.habittracker.dto.user.CreateUserRequest;
 import com.tp1.habittracker.dto.user.LoginRequest;
 import com.tp1.habittracker.exception.DuplicateResourceException;
+import com.tp1.habittracker.repository.OutboxEventRepository;
 import com.tp1.habittracker.repository.UserRepository;
 import java.util.Optional;
 import java.util.UUID;
@@ -28,6 +29,9 @@ class AuthServiceTest {
     private UserRepository userRepository;
 
     @Mock
+    private OutboxEventRepository outboxEventRepository;
+
+    @Mock
     private PasswordEncoder passwordEncoder;
 
     @Mock
@@ -38,7 +42,7 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
-        userService = new UserService(userRepository, passwordEncoder);
+        userService = new UserService(userRepository, outboxEventRepository, passwordEncoder);
         authService = new AuthService(userRepository, passwordEncoder, jwtService, userService);
     }
 

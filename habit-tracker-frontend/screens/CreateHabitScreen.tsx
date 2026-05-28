@@ -68,6 +68,7 @@ export const CreateHabitScreen = () => {
 
   const mode = route.params?.mode ?? 'create';
   const habit = route.params?.habit;
+  const prefillName = route.params?.prefillName;
   const isEditMode = mode === 'edit';
   const isViewMode = mode === 'view';
   const isReadOnly = isViewMode;
@@ -90,7 +91,7 @@ export const CreateHabitScreen = () => {
 
   useEffect(() => {
     if (mode === 'create') {
-      setName('');
+      setName(prefillName ?? '');
       setSelectedType('');
       setSelectedFrequency('');
       setErrors({});
@@ -108,7 +109,7 @@ export const CreateHabitScreen = () => {
     setSelectedFrequency(habit.frequency);
     setErrors({});
     setApiError(null);
-  }, [habit, mode]);
+  }, [habit, mode, prefillName]);
 
   const resolveUserId = async () => {
     if (user?.id) {

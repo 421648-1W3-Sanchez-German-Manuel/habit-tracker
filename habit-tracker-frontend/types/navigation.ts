@@ -1,3 +1,4 @@
+import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { Habit } from './habit';
 
 export type AuthStackParamList = {
@@ -6,8 +7,9 @@ export type AuthStackParamList = {
 };
 
 export type MainTabParamList = {
-  Habits: undefined;
+  Habits: NavigatorScreenParams<HabitsStackParamList> | undefined;
   Home: undefined;
+  Friends: NavigatorScreenParams<FriendsStackParamList> | undefined;
   Profile: undefined;
 };
 
@@ -22,6 +24,17 @@ export type HabitsStackParamList = {
     | {
         mode?: 'create' | 'edit' | 'view';
         habit?: Habit;
+        prefillName?: string;
       }
     | undefined;
+};
+
+export type FriendsTopTabParamList = {
+  FriendsList: undefined;
+  IncomingRequests: undefined;
+  OutgoingRequests: undefined;
+};
+
+export type FriendsStackParamList = {
+  FriendsHome: undefined;
 };

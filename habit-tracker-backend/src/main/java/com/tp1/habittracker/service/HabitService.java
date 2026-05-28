@@ -1,6 +1,8 @@
 package com.tp1.habittracker.service;
 
+import com.tp1.habittracker.domain.model.GraphEventType;
 import com.tp1.habittracker.domain.model.Habit;
+import com.tp1.habittracker.domain.model.OutboxEvent;
 import com.tp1.habittracker.dto.habit.CreateHabitRequest;
 import com.tp1.habittracker.dto.habit.HabitStreakResponse;
 import com.tp1.habittracker.dto.habit.UpdateHabitRequest;
@@ -9,6 +11,7 @@ import com.tp1.habittracker.exception.ResourceNotFoundException;
 import com.tp1.habittracker.repository.HabitLogDateView;
 import com.tp1.habittracker.repository.HabitLogRepository;
 import com.tp1.habittracker.repository.HabitRepository;
+import com.tp1.habittracker.repository.OutboxEventRepository;
 import com.tp1.habittracker.repository.UserRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -44,6 +47,7 @@ public class HabitService {
     private final HabitRepository habitRepository;
     private final UserRepository userRepository;
     private final HabitLogRepository habitLogRepository;
+    private final OutboxEventRepository outboxEventRepository;
     private final OllamaClient ollamaClient;
     private final HabitSimilarityService habitSimilarityService;
 
@@ -79,7 +83,18 @@ public class HabitService {
                 .embedding(embedding)
                 .build();
 
-        return habitRepository.save(habit);
+        Habit saved = habitRepository.save(habit);
+        publishHabitEvent(GraphEventType.HABIT_CREATED, saved.getId(), saved.getUserId(), saved.getName());
+        return saved;
+    }
+
+    private void publishHabitEvent(GraphEventType type, String habitId, String ownerUserId, String payload) {
+        outboxEventRepository.save(OutboxEvent.builder()
+                .eventType(type)
+                .aggregateId(habitId)
+                .relatedId(ownerUserId)
+                .payload(payload)
+                .build());
     }
 
     private void throwDuplicateResourceException(Habit similarHabit, double similarityScore, String matchType) {
@@ -175,6 +190,7 @@ public class HabitService {
                 .build();
 
         Habit savedHabit = habitRepository.save(newUserHabit);
+        publishHabitEvent(GraphEventType.HABIT_CREATED, savedHabit.getId(), savedHabit.getUserId(), savedHabit.getName());
         return new AddDefaultHabitResult(savedHabit, true);
     }
 
@@ -197,7 +213,9 @@ public class HabitService {
         List<Double> embedding = ollamaClient.generateEmbedding(updatedName);
         existingHabit.setEmbedding(embedding);
 
-        return habitRepository.save(existingHabit);
+        Habit saved = habitRepository.save(existingHabit);
+        publishHabitEvent(GraphEventType.HABIT_UPDATED, saved.getId(), saved.getUserId(), saved.getName());
+        return saved;
     }
 
     public void deleteHabit(String authenticatedUserId, String habitId) {
@@ -208,6 +226,7 @@ public class HabitService {
 
         habitLogRepository.deleteAllByHabitId(validatedHabitId);
         habitRepository.deleteById(validatedHabitId);
+        publishHabitEvent(GraphEventType.HABIT_DELETED, validatedHabitId, validatedUserId, null);
     }
 
     // Generate a simple deterministic embedding vector for internal use.
